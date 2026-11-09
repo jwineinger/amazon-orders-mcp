@@ -128,6 +128,45 @@ the equivalent MCP settings file:
 
 Then restart Claude Code.
 
+## Multiple Amazon accounts
+
+Run one server per account. Setting `AMAZON_ORDERS_MCP_ACCOUNT` gives that
+account its own cookie jar (`~/.amazon-orders-mcp/accounts/<name>/cookies.json`)
+and its own keyring service (`com.mcp.amazon-orders-mcp.<name>`). Names are
+1–32 lowercase letters, digits, `-` or `_`.
+
+Capture each account's session, signing in as that person each time:
+
+```bash
+uv run python cookie_capture.py --account alice
+uv run python cookie_capture.py --account bob
+```
+
+Then register a server for each, with the matching name:
+
+```json
+{
+  "mcpServers": {
+    "amazon-orders-alice": {
+      "command": "uv",
+      "args": ["--directory", "/absolute/path/to/amazon-orders-mcp", "run", "amazon-orders-mcp"],
+      "env": { "AMAZON_ORDERS_MCP_ACCOUNT": "alice" }
+    },
+    "amazon-orders-bob": {
+      "command": "uv",
+      "args": ["--directory", "/absolute/path/to/amazon-orders-mcp", "run", "amazon-orders-mcp"],
+      "env": { "AMAZON_ORDERS_MCP_ACCOUNT": "bob" }
+    }
+  }
+}
+```
+
+Or with the Claude Code CLI:
+`claude mcp add --scope user amazon-orders-alice -e AMAZON_ORDERS_MCP_ACCOUNT=alice -- uv --directory /absolute/path/to/amazon-orders-mcp run amazon-orders-mcp`
+
+Without the variable the server uses the original single-account locations
+(`~/.amazon-orders-mcp/cookies.json`).
+
 ## Usage examples
 
 Inside a Claude Code session:

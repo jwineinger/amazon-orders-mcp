@@ -6,7 +6,7 @@ This script launches a real Chromium browser via Playwright, navigates to
 Amazon's sign-in page, and waits for the user to authenticate interactively.
 Once signed in, it extracts the full set of amazon.com cookies (including
 httpOnly ones that JavaScript cannot see) and writes them to the cookie jar
-at ~/.amazon-orders-mcp/cookies.json in the format expected by the
+at ~/.amazon-orders-mcp/cookies.json (or the --account's own jar) in the format expected by the
 `amazon-orders` Python library.
 
 Why this exists: amazon-orders uses a plain `requests.Session` to log in,
@@ -16,10 +16,15 @@ post-authentication, we sidestep the WAF entirely — amazon-orders sees a
 valid session and skips the sign-in flow.
 
 Run from the repo root:
-    uv run python cookie_capture.py
+    uv run python cookie_capture.py [--account NAME]
+
+With --account, the cookies are stored for that account only (see
+secure_session.py), so several Amazon accounts can each have a session.
 """
 
+import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -28,10 +33,26 @@ from pathlib import Path
 src_path = Path(__file__).parent / "src"
 sys.path.insert(0, str(src_path))
 
-from playwright.sync_api import Error as PlaywrightError
-from playwright.sync_api import sync_playwright
+# Pick the account before importing the package: secure_session resolves its
+# paths from AMAZON_ORDERS_MCP_ACCOUNT at import time.
+_parser = argparse.ArgumentParser(description=__doc__.strip().splitlines()[0])
+_parser.add_argument(
+    "--account",
+    help="Account name (e.g. alice). Stores this session separately; the MCP "
+    "server for it must set AMAZON_ORDERS_MCP_ACCOUNT to the same name.",
+)
+_args = _parser.parse_args()
+if _args.account:
+    os.environ["AMAZON_ORDERS_MCP_ACCOUNT"] = _args.account
 
-from amazon_orders_mcp.secure_session import COOKIE_JAR_PATH, ensure_data_dir
+from playwright.sync_api import Error as PlaywrightError  # noqa: E402
+from playwright.sync_api import sync_playwright  # noqa: E402
+
+from amazon_orders_mcp.secure_session import (  # noqa: E402
+    ACCOUNT,
+    COOKIE_JAR_PATH,
+    ensure_data_dir,
+)
 
 # The cookie the amazon-orders library uses to detect an authenticated session
 REQUIRED_COOKIE = "x-main"
@@ -47,6 +68,9 @@ def main() -> None:
     print("to Amazon. Once signed in, cookies will be captured and saved")
     print("for the MCP server to use.\n")
     print("Press Ctrl+C to cancel at any time.\n")
+    if ACCOUNT:
+        print(f"👤 Account: {ACCOUNT} — sign in as this person.")
+        print(f"   Cookies will be saved to {COOKIE_JAR_PATH}\n")
 
     ensure_data_dir()
 

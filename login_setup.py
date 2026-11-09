@@ -9,19 +9,34 @@ This script:
   3. Builds an AmazonSession and runs a real login — handling any captcha
      or device-selection prompts interactively in your terminal.
   4. On success, the session's cookies are persisted to
-     ~/.amazon-orders-mcp/cookies.json for future MCP server use.
+     ~/.amazon-orders-mcp/cookies.json (or the --account's own jar) for
+     future MCP server use.
 
 Run from the repo root:
-    uv run python login_setup.py
+    uv run python login_setup.py [--account NAME]
 """
 
+import argparse
 import getpass
+import os
 import sys
 from pathlib import Path
 
 # Add the src directory so we can import our package without installing
 src_path = Path(__file__).parent / "src"
 sys.path.insert(0, str(src_path))
+
+# Pick the account before importing the package: secure_session resolves its
+# paths from AMAZON_ORDERS_MCP_ACCOUNT at import time.
+_parser = argparse.ArgumentParser(description=__doc__.strip().splitlines()[0])
+_parser.add_argument(
+    "--account",
+    help="Account name (e.g. alice). Stores this session separately; the MCP "
+    "server for it must set AMAZON_ORDERS_MCP_ACCOUNT to the same name.",
+)
+_args = _parser.parse_args()
+if _args.account:
+    os.environ["AMAZON_ORDERS_MCP_ACCOUNT"] = _args.account
 
 from amazon_orders_mcp.client import build_session, ensure_authenticated  # noqa: E402
 from amazon_orders_mcp.secure_session import (  # noqa: E402

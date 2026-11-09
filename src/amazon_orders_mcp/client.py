@@ -20,6 +20,7 @@ from amazon_orders_mcp.secure_session import (
     COOKIE_JAR_PATH,
     OUTPUT_DIR,
     AmazonCredentials,
+    capture_command,
     cookie_jar_exists,
     ensure_data_dir,
     load_credentials,
@@ -75,7 +76,7 @@ class NonInteractiveIO(IODefault):
     def prompt(self, msg: str, type: Optional[type] = None, **kwargs: Any) -> Any:
         raise NonInteractiveAuthRequired(
             f"Amazon requires interactive input ({msg!r}). "
-            "Cookies may be expired — run `uv run python cookie_capture.py` "
+            f"Cookies may be expired — run `{capture_command()}` "
             "to capture a fresh session."
         )
 
@@ -119,8 +120,8 @@ def build_session(
     if creds is None:
         if not cookie_jar_exists():
             raise RuntimeError(
-                "No Amazon cookies found. Run `uv run python cookie_capture.py` "
-                "to capture a session from your browser."
+                f"No Amazon cookies found at {COOKIE_JAR_PATH}. Run "
+                f"`{capture_command()}` to capture a session from your browser."
             )
         # Cookie-only auth — use placeholders to satisfy the constructor.
         creds = AmazonCredentials(
@@ -160,5 +161,5 @@ def ensure_authenticated(session: AmazonSession) -> None:
     if not session.is_authenticated:
         raise RuntimeError(
             "Amazon authentication failed. Cookies may be stale — "
-            "run `uv run python cookie_capture.py` to refresh."
+            f"run `{capture_command()}` to refresh."
         )

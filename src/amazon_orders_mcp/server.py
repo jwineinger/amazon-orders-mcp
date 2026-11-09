@@ -25,7 +25,13 @@ from amazon_orders_mcp.client import (
     build_session,
     ensure_authenticated,
 )
-from amazon_orders_mcp.secure_session import cookie_jar_exists, load_credentials
+from amazon_orders_mcp.secure_session import (
+    ACCOUNT,
+    COOKIE_JAR_PATH,
+    capture_command,
+    cookie_jar_exists,
+    load_credentials,
+)
 from amazon_orders_mcp.serialize import (
     serialize_order,
     serialize_orders,
@@ -54,7 +60,15 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-mcp = MCPServer("Amazon Orders MCP Server")
+mcp = MCPServer(
+    "Amazon Orders MCP Server" + (f" ({ACCOUNT})" if ACCOUNT else ""),
+    instructions=(
+        f"Serves the Amazon account '{ACCOUNT}'. Other accounts, if any, have "
+        "their own amazon-orders-<name> server."
+        if ACCOUNT
+        else None
+    ),
+)
 
 # Wall-clock timeouts per tool (seconds). These are an upper bound — actual
 # requests are also capped at DEFAULT_HTTP_TIMEOUT (see client.py). These
@@ -111,7 +125,7 @@ async def _run_blocking(
         # us to the sign-in page). In either case, the cookies are stale.
         logger.warning(f"{tool_name} hit auth error: {e}")
         return _error(
-            "Amazon session has expired. Re-run `uv run python cookie_capture.py` "
+            f"Amazon session has expired. Re-run `{capture_command()}` "
             "in the amazon-orders-mcp repo to capture fresh cookies, then retry.",
             action_required="run_cookie_capture",
             underlying_error=str(e),
@@ -131,20 +145,23 @@ async def _run_blocking(
 @mcp.tool()
 def setup_authentication() -> str:
     """Get instructions for setting up Amazon authentication."""
-    return """🛒 Amazon Orders MCP — One-Time Setup
-
+    account_line = (
+        f"\nThis server is for the Amazon account '{ACCOUNT}'.\n" if ACCOUNT else ""
+    )
+    return f"""🛒 Amazon Orders MCP — One-Time Setup
+{account_line}
 Amazon blocks the Python `requests` library's sign-in flow with a JavaScript
 WAF challenge, so this server authenticates by capturing cookies from a real
 Chromium browser session instead.
 
 1️⃣  Open Terminal in the server directory and run:
-    uv run python cookie_capture.py
+    {capture_command()}
 
 2️⃣  A Chromium window will open to the Amazon sign-in page.
     Enter your email, password, and any 2FA code as usual.
 
 3️⃣  The script auto-detects when you're signed in, extracts the cookies,
-    and writes them to ~/.amazon-orders-mcp/cookies.json.
+    and writes them to {COOKIE_JAR_PATH}.
 
 4️⃣  After that, use these tools from Claude:
     • get_order_history - List orders (by year or time filter)
@@ -154,7 +171,7 @@ Chromium browser session instead.
 
 ✅ Cookies persist until Amazon expires them (typically weeks)
 ✅ No credentials are stored — cookie jar only
-🔁 When cookies expire, just re-run cookie_capture.py"""
+🔁 When cookies expire, just re-run `{capture_command()}`"""
 
 
 @mcp.tool()
@@ -169,17 +186,17 @@ def check_auth_status() -> str:
     has_creds = creds is not None
 
     status_lines = []
+    if ACCOUNT:
+        status_lines.append(f"👤 Account: {ACCOUNT}")
 
     if has_cookies:
-        status_lines.append("✅ Cookie jar exists at ~/.amazon-orders-mcp/cookies.json")
+        status_lines.append(f"✅ Cookie jar exists at {COOKIE_JAR_PATH}")
         status_lines.append(
             "   Try `get_order_history(time_filter='last30')` to verify they still work."
         )
     else:
-        status_lines.append("❌ No cookie jar found")
-        status_lines.append(
-            "   Run `uv run python cookie_capture.py` to capture a session."
-        )
+        status_lines.append(f"❌ No cookie jar found at {COOKIE_JAR_PATH}")
+        status_lines.append(f"   Run `{capture_command()}` to capture a session.")
 
     if has_creds:
         status_lines.append(

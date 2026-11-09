@@ -5,18 +5,45 @@ Credentials (email, password, optional TOTP secret) are stored in the system
 keyring. Amazon session cookies are persisted by the amazon-orders library to
 a data directory owned by this server (isolated from any other amazon-orders
 usage on the host).
+
+Several Amazon accounts can be used side by side: set
+`AMAZON_ORDERS_MCP_ACCOUNT` (e.g. `alice`) and that account gets its own data
+directory under `~/.amazon-orders-mcp/accounts/<name>/` and its own keyring
+service. Run one MCP server per account. Without the variable, the original
+single-account locations are used.
 """
 
 import logging
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+ACCOUNT_ENV_VAR = "AMAZON_ORDERS_MCP_ACCOUNT"
+_ACCOUNT_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
+
+
+def _account_from_env() -> Optional[str]:
+    """Return the configured account name, or None for single-account mode."""
+    raw = os.getenv(ACCOUNT_ENV_VAR, "").strip().lower()
+    if not raw:
+        return None
+    if not _ACCOUNT_NAME_RE.match(raw):
+        raise ValueError(
+            f"{ACCOUNT_ENV_VAR}={raw!r} is not a valid account name. Use 1-32 "
+            "lowercase letters, digits, '-' or '_', starting with a letter or digit."
+        )
+    return raw
+
+
+# Which Amazon account this process serves (None = the original single account)
+ACCOUNT: Optional[str] = _account_from_env()
+
 # Keyring service identifier
-KEYRING_SERVICE = "com.mcp.amazon-orders-mcp"
+KEYRING_SERVICE = "com.mcp.amazon-orders-mcp" + (f".{ACCOUNT}" if ACCOUNT else "")
 
 # Keyring usernames — each credential component is stored under its own key
 # so they can be updated independently.
@@ -25,7 +52,8 @@ KEY_PASSWORD = "amazon-password"
 KEY_OTP_SECRET = "amazon-otp-secret"
 
 # Data directory for cookies + library state
-DATA_DIR = Path.home() / ".amazon-orders-mcp"
+BASE_DIR = Path.home() / ".amazon-orders-mcp"
+DATA_DIR = BASE_DIR / "accounts" / ACCOUNT if ACCOUNT else BASE_DIR
 COOKIE_JAR_PATH = DATA_DIR / "cookies.json"
 OUTPUT_DIR = DATA_DIR / "output"
 
@@ -39,13 +67,23 @@ class AmazonCredentials:
     otp_secret_key: Optional[str] = None
 
 
+def capture_command() -> str:
+    """The cookie-capture command for this process's account."""
+    suffix = f" --account {ACCOUNT}" if ACCOUNT else ""
+    return f"uv run python cookie_capture.py{suffix}"
+
+
 def ensure_data_dir() -> None:
-    """Create the data directory with owner-only permissions."""
+    """Create the data directory (and its parents) with owner-only permissions."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    try:
-        DATA_DIR.chmod(0o700)
-    except OSError:
-        pass
+    # Only directories this server owns — never DATA_DIR.parent, which is
+    # the home directory in single-account mode.
+    owned = [BASE_DIR, BASE_DIR / "accounts", DATA_DIR] if ACCOUNT else [BASE_DIR]
+    for d in owned:
+        try:
+            d.chmod(0o700)
+        except OSError:
+            pass
 
 
 def save_credentials(creds: AmazonCredentials) -> None:
