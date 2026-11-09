@@ -72,15 +72,15 @@ class NonInteractiveAuthRequired(RuntimeError):
 class NonInteractiveIO(IODefault):
     """IODefault subclass that refuses to prompt — fails fast instead."""
 
-    def prompt(self, message: str, type: Optional[type] = None, **kwargs: Any) -> Any:
+    def prompt(self, msg: str, type: Optional[type] = None, **kwargs: Any) -> Any:
         raise NonInteractiveAuthRequired(
-            f"Amazon requires interactive input ({message!r}). "
+            f"Amazon requires interactive input ({msg!r}). "
             "Cookies may be expired — run `uv run python cookie_capture.py` "
             "to capture a fresh session."
         )
 
-    def echo(self, message: str, **kwargs: Any) -> None:
-        logger.info(message)
+    def echo(self, msg: str, **kwargs: Any) -> None:
+        logger.info(msg)
 
 
 def build_config() -> AmazonOrdersConfig:

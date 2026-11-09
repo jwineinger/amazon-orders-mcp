@@ -17,7 +17,7 @@ from typing import Any, Callable, Dict, List, Optional, cast
 
 from amazonorders.exception import AmazonOrdersAuthError
 from dotenv import load_dotenv
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from amazon_orders_mcp.client import (
@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-mcp = FastMCP("Amazon Orders MCP Server")
+mcp = MCPServer("Amazon Orders MCP Server")
 
 # Wall-clock timeouts per tool (seconds). These are an upper bound — actual
 # requests are also capped at DEFAULT_HTTP_TIMEOUT (see client.py). These
@@ -206,11 +206,14 @@ def _blocking_get_order_history(
     ensure_authenticated(session)
     amazon_orders = AmazonOrders(session)
 
-    orders = amazon_orders.get_order_history(
+    orders = amazon_orders.get_orders(
         year=year,
         start_index=start_index,
         full_details=full_details,
         time_filter=time_filter,
+        # amazon-orders 5.2+ returns the whole Amazon Household's orders by
+        # default; "self" keeps this tool scoped to the signed-in account.
+        family_member_id="self",
     )
     return _json(serialize_orders(orders))
 

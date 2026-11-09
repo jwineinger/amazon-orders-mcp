@@ -20,8 +20,8 @@ classifiers = [
 ]
 requires-python = ">=3.11,<3.13"
 dependencies = [
-    "mcp[cli]>=1.0.0",
-    "amazon-orders==4.0.*",
+    "mcp[cli]>=2.3,<3",
+    "amazon-orders>=5.2.1,<6",
     "keyring>=24.0.0",
     "python-dotenv>=1.0.0",
     "pydantic>=2.0.0",

@@ -52,7 +52,11 @@ Clone and install dependencies with uv:
 git clone https://github.com/seanoliver/amazon-orders-mcp.git
 cd amazon-orders-mcp
 uv sync
+uv run playwright install chromium   # browser used by cookie_capture.py
 ```
+
+Re-run the `playwright install` line after upgrading Playwright; each
+version expects its own Chromium build.
 
 ## One-time setup — cookie capture
 
